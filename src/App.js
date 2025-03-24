@@ -1,5 +1,3 @@
-import logo from './logo.svg';
-
 import './App.css';
 import Board from './components/Board/board'
 function App() {
@@ -7,7 +5,6 @@ function App() {
     <div className='App'>
     <Board/>
     </div>
-    
   );
 }
 
