@@ -76,7 +76,7 @@ const saveGame = (roomId, board, turn, log) => {
   localStorage.setItem(`chess-${roomId}`, JSON.stringify({ board, turn, log }));
 };
 
-const ChessBoard = ({ gameId }) => {
+const ChessBoard = () => {
   const [searchParams] = useSearchParams();
   const roomId = searchParams.get("roomId");
   const role = searchParams.get("role") || "player";
@@ -88,6 +88,7 @@ const ChessBoard = ({ gameId }) => {
   const [moveLog, setMoveLog] = useState([]);
   const [resigned, setResigned] = useState(false);
   const [moveText, setMoveText] = useState("");
+  const [maxEval, setMaxEval] = useState(-Infinity);
 
   useEffect(() => {
     const localGame = getSavedGame(roomId);
@@ -194,20 +195,31 @@ const ChessBoard = ({ gameId }) => {
     setTurn(updatedTurn);
     saveGame(roomId, newBoard, updatedTurn, updatedLog);
   };
+
 const sendMoveToBackend = async (fen, moveNotation, playerColor) => {
-  const evaluation = await getEvaluation(fen);  // This will now get a correct evaluation based on the FEN
+  const evaluation = await getEvaluation(fen);
+
+  // Compare and set max evaluation
+  setMaxEval(prev => {
+    const newEval = parseFloat(evaluation);
+    if (!isNaN(newEval) && newEval > prev) {
+      setMoveText(`Best Eval So Far: ${newEval.toFixed(2)}`);
+      return newEval;
+    }
+    return prev;
+  });
 
   const moveData = {
-    gameId,
+    gameId: roomId,
     player: playerColor,
     notation: moveNotation,
-    fen,
+    fen: fen,
     evaluation,
     timestamp: new Date().toISOString(),
   };
 
   try {
-    await fetch('/api/moves', {
+    await fetch('http://localhost:5000/api/moves', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(moveData),
@@ -217,37 +229,23 @@ const sendMoveToBackend = async (fen, moveNotation, playerColor) => {
     console.error('Error sending move:', err);
   }
 };
-  const getEvaluation = async (fen) => {
-    try {
-      const encodedFen = encodeURIComponent(fen); // encodes spaces, slashes, etc.
-      const url = `https://lichess.org/api/cloud-eval?fen=${encodedFen}&depth=2`;
-  
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-  
-      const data = await response.json();
-  
-      // The response might contain centipawn (cp) or mate (mate) evaluations
-      const evalObj = data.pvs?.[0]?.eval;
-      if (!evalObj) return "No eval";
-  
-      if ("cp" in evalObj) {
-        // Centipawn evaluation (e.g., +50 means white is slightly better)
-        return evalObj.cp / 100; // Convert to decimal
-      } else if ("mate" in evalObj) {
-        // Mate in N
-        return `Mate in ${evalObj.mate}`;
-      } else {
-        return "Unknown eval format";
-      }
-    } catch (error) {
-      console.error("Evaluation fetch error:", error);
-      return "Error";
-    }
-  };
-  
+
+const getEvaluation = async (fen) => {
+  try {
+    const response = await fetch('http://localhost:5000/api/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fen }),
+    });
+    console.log(fen);
+    const data = await response.json();
+    return data.evaluation;
+  } catch (error) {
+    console.error("Evaluation fetch error:", error);
+    return "Error";
+  }
+};
+
   
   const handleClick = (row, col) => {
     if (role === "watcher") return;
@@ -323,7 +321,7 @@ const sendMoveToBackend = async (fen, moveNotation, playerColor) => {
     setMoveLog((prev) => [...prev, `${color} resigned`]);
   }}>Resign</Button>
         <Button color="warning" disabled={!resigned}>Show the worst move</Button>
-        <Input type="text" value={moveText} readOnly />
+        <Input type="text" value={moveText} readOnly className="my-2 text-center"/>
       </div>
     </div>
   );
