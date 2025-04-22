@@ -1,15 +1,17 @@
 import "./Game.css";
 import { useEffect, useState } from "react";
-import { Navbar, Nav, NavItem, NavLink, Input, Button } from "reactstrap";
+import { Navbar, Nav, NavItem, Input, Button } from "reactstrap";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { v4 as uuidv4 } from "uuid";
+import Chessboard from "./Chessboard"; // Ensure Chessboard is imported
 
 const Game = () => {
   const navigate = useNavigate();
   const [animate, setAnimate] = useState(false);
   const [joinRoomId, setJoinRoomId] = useState("");
   const [viewRoomId, setViewRoomId] = useState("");
+  const [gameId, setGameId] = useState(null); // State to store gameId
 
   useEffect(() => {
     setTimeout(() => setAnimate(true), 1000);
@@ -17,11 +19,13 @@ const Game = () => {
 
   const handleStart = () => {
     const roomId = uuidv4();
+    setGameId(roomId); // Set the gameId when starting a new match
     navigate(`/play?roomId=${roomId}&role=player&color=white`);
   };
 
   const handleJoin = () => {
     if (joinRoomId.trim()) {
+      setGameId(joinRoomId); // Set the gameId when joining an existing match
       navigate(`/play?roomId=${joinRoomId}&role=player&color=black`);
     } else {
       alert("Please enter a room ID to join.");
@@ -70,6 +74,9 @@ const Game = () => {
           </NavItem>
         </Nav>
       </Navbar>
+
+      {/* Render Chessboard and pass the gameId */}
+      {gameId && <Chessboard gameId={gameId} />}
     </div>
   );
 };

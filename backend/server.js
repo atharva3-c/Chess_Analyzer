@@ -8,6 +8,9 @@ import { Server } from 'socket.io';
 import authRoutes from './routes/auth.js';
 import matchRoutes from './routes/matches.js';
 
+import gameRoutes from './routes/games.js';
+import moveRoutes from './routes/moves.js';
+
 dotenv.config();
 
 const app = express();
@@ -30,6 +33,8 @@ mongoose.connect(process.env.MONGO_URI, {
 
 app.use('/api', authRoutes);
 app.use('/api', matchRoutes);
+app.use('/api', gameRoutes);
+app.use('/api', moveRoutes);
 
 io.on("connection", (socket) => {
   console.log(`Connected: ${socket.id}`);

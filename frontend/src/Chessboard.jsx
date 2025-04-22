@@ -22,6 +22,38 @@ const pieceMap = {
   p: b_pawn, r: b_rook, n: b_knight, b: b_bishop, q: b_queen, k: b_king,
 };
 
+//
+const generateFEN = (board, turn) => {
+  const pieceToFEN = {
+    'P': 'P', 'R': 'R', 'N': 'N', 'B': 'B', 'Q': 'Q', 'K': 'K',
+    'p': 'p', 'r': 'r', 'n': 'n', 'b': 'b', 'q': 'q', 'k': 'k',
+    '': ''
+  };
+  let fen = "";
+  for (let i = 0; i < 8; i++) {
+    let emptyCount = 0;
+    for (let j = 0; j < 8; j++) {
+      const piece = board[i][j];
+      if (piece === "") {
+        emptyCount++;
+      } else {
+        if (emptyCount > 0) {
+          fen += emptyCount;
+          emptyCount = 0;
+        }
+        fen += pieceToFEN[piece];
+      }
+    }
+    if (emptyCount > 0) fen += emptyCount;
+    if (i < 7) fen += "/";
+  }
+  fen += ` ${turn[0]} - - 0 1`;  // Simplified FEN
+  return fen;
+};
+//
+
+
+
 const defaultBoard = [
   ["r", "n", "b", "q", "k", "b", "n", "r"],
   ["p", "p", "p", "p", "p", "p", "p", "p"],
@@ -44,7 +76,7 @@ const saveGame = (roomId, board, turn, log) => {
   localStorage.setItem(`chess-${roomId}`, JSON.stringify({ board, turn, log }));
 };
 
-const ChessBoard = () => {
+const ChessBoard = ({ gameId }) => {
   const [searchParams] = useSearchParams();
   const roomId = searchParams.get("roomId");
   const role = searchParams.get("role") || "player";
@@ -101,6 +133,7 @@ const ChessBoard = () => {
     }
 
     return () => {
+      socket.emit("leave-game", roomId);
       socket.off("opponent-move");
       socket.off("sync-request");
       socket.off("sync-board");
@@ -155,11 +188,67 @@ const ChessBoard = () => {
     const updatedTurn = turnOverride || (turn === "white" ? "black" : "white");
 
     setBoard(newBoard);
+    const fen = generateFEN(newBoard, updatedTurn);
+    sendMoveToBackend(fen, moveNotation, updatedLog.length);
     setMoveLog(updatedLog);
     setTurn(updatedTurn);
     saveGame(roomId, newBoard, updatedTurn, updatedLog);
   };
+const sendMoveToBackend = async (fen, moveNotation, playerColor) => {
+  const evaluation = await getEvaluation(fen);  // This will now get a correct evaluation based on the FEN
 
+  const moveData = {
+    gameId,
+    player: playerColor,
+    notation: moveNotation,
+    fen,
+    evaluation,
+    timestamp: new Date().toISOString(),
+  };
+
+  try {
+    await fetch('/api/moves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(moveData),
+    });
+    console.log('Move sent:', moveData);
+  } catch (err) {
+    console.error('Error sending move:', err);
+  }
+};
+  const getEvaluation = async (fen) => {
+    try {
+      const encodedFen = encodeURIComponent(fen); // encodes spaces, slashes, etc.
+      const url = `https://lichess.org/api/cloud-eval?fen=${encodedFen}&depth=2`;
+  
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+  
+      const data = await response.json();
+  
+      // The response might contain centipawn (cp) or mate (mate) evaluations
+      const evalObj = data.pvs?.[0]?.eval;
+      if (!evalObj) return "No eval";
+  
+      if ("cp" in evalObj) {
+        // Centipawn evaluation (e.g., +50 means white is slightly better)
+        return evalObj.cp / 100; // Convert to decimal
+      } else if ("mate" in evalObj) {
+        // Mate in N
+        return `Mate in ${evalObj.mate}`;
+      } else {
+        return "Unknown eval format";
+      }
+    } catch (error) {
+      console.error("Evaluation fetch error:", error);
+      return "Error";
+    }
+  };
+  
+  
   const handleClick = (row, col) => {
     if (role === "watcher") return;
     if (turn !== color) return;

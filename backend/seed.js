@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import User from './models/User.js';
-import Match from './models/Match.js';
+import Match from './models/Move.js';
 
 dotenv.config();
 

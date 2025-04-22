@@ -1,5 +1,5 @@
 import express from 'express';
-import Match from '../models/Match.js';
+import Match from '../models/Move.js';
 
 const router = express.Router();
 
